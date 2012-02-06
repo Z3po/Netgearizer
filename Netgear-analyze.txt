@@ -1,0 +1,322 @@
+DISCOVERY to switch
+01 01
+00 00 00 00 00 00
+00 1d 72 82 22 7b                           - MY MAC
+00 00 00 00 00 00                           - NO NETGEAR MAC KNOWN
+00 00 00 01
+4e 53 44 50                                 - NSDP
+00 00 00 00
+00 01 00 00
+00 02 00 00
+00 03 00 00
+00 04 00 00
+00 05 00 00
+00 06 00 00
+00 07 00 00
+00 08 00 00
+00 0b 00 00
+00 0c 00 00
+00 0d 00 00
+00 0e 00 00
+00 0f 00 00
+74 00 00 00
+ff ff 00 00
+
+POSSIBLE ANSWER from switch
+01 02
+00 00 00 00 00 00
+00 1d 72 82 22 7b                         - MY MAC
+c4 3d c7 81 8b df                         - NETGEAR MAC?
+00 00 00 01 
+4e 53 44 50                               -   NSDP
+00 00 00 00
+00 01 00 08
+47 53 31 30 38 45 76 32                   -  GS108Ev2
+00 02
+00 02 00 00
+00 03 00 00
+00 04 00 06
+c4 3d c7 81 8b df                         - NETGEAR MAC?
+00 05 00 00
+00 06 00 04 c0 a8 03 05
+00 07 00 04 ff ff ff 00
+00 08 00 04 c0 a8 03 01
+00 0b 00 01 01
+00 0c 00 01 01
+00 0d 00 07
+31 2e 30 30 2e 30 34                      -  1.00.04
+00 0e 00 00
+00 0f 00 01 01
+74 00 00 08 00 00 00 00 1f fc ff ff
+ff ff 00 00
+
+ANOTHER DISCOVERY? to switch
+01 01
+00 00 00 00 00 00
+00 1d 72 82 22 7b                           - MY MAC
+00 00 00 00 00 00                           - NO NETGEAR MAC KNOWN
+00 00 00 01
+4e 53 44 50                                 - NSDP
+00 00 00 00
+00 01 00 00
+00 02 00 00
+00 03 00 00
+00 04 00 00
+00 05 00 00
+00 06 00 00
+00 07 00 00
+00 08 00 00
+00 0b 00 00
+00 0c 00 00
+00 0d 00 00
+00 0e 00 00
+00 0f 00 00
+74 00 00 00
+ff ff 00 00
+
+Maybe another type of discovery to switches
+ff ff ff ff ff ff
+00 1d 72 82 22 7b                           - MY MAC
+08 00 45 00 00 74 7b 74 00 00 80 11 fb 56
+c0 a8 03 06
+ff ff ff ff
+f7 59 f7 5a
+00 60 c4 1f
+
+01 01
+00 00 00 00 00 00
+00 1d 72 82 22 7b                           - MY MAC
+00 00 00 00 00 00                           - NO NETGEAR MAC KNOWN
+00 00 00 02
+4e 53 44 50                                 - NSDP
+00 00 00 00
+00 01 00 00
+00 02 00 00
+00 03 00 00
+00 04 00 00
+00 05 00 00
+00 06 00 00
+00 07 00 00
+00 08 00 00
+00 0b 00 00
+00 0c 00 00
+00 0d 00 00
+00 0e 00 00
+00 0f 00 00
+ff ff 00 00
+
+ANOTHER ANSWER from switch
+01 02
+00 00 00 00 00 00
+00 1d 72 82 22 7b
+c4 3d c7 81 8b df
+00 00 00 02 
+4e 53 44 50                                 - NSDP
+00 00 00 00
+00 01 00 08
+47 53 31 30 38 45 76 32                     - GS108Ev2
+00 02
+00 02 00 00
+00 03 00 00
+00 04 00 06
+c4 3d c7 81 8b df                           - NETGEAR MAC?
+00 05 00 00
+00 06 00 04 c0 a8 03 05
+00 07 00 04 ff ff ff 00
+00 08 00 04 c0 a8 03 01
+00 0b 00 01 01 00 0c 00 01 01
+00 0d 00 07
+31 2e 30 30 2e 30 34                        - 1.00.04
+00 0e 00 00
+00 0f 00 01 01
+ff ff 00 00
+
+Discovery to switches?
+01 01
+00 00 00 00 00 00
+00 1d 72 82 22 7b                           - MY MAC
+00 00 00 00 00 00                           - No Netgear MAC KNOWN
+00 00 00 02
+4e 53 44 50                                 - NSDP
+00 00 00 00
+00 01 00 00
+00 02 00 00
+00 03 00 00
+00 04 00 00
+00 05 00 00
+00 06 00 00
+00 07 00 00
+00 08 00 00
+00 0b 00 00
+00 0c 00 00
+00 0d 00 00
+00 0e 00 00
+00 0f 00 00
+ff ff 00 00
+
+AUTHENTICATION: to switch
+01 03
+00 00 00 00 00 00
+00 1d 72 82 22 7b           - MY MAC
+c4 3d c7 81 8b df           - NETGEAR MAC?
+00 00 00 03
+4e 53 44 50                 - NSDP
+00 00 00 00
+00 0a 00 08                 - PASSWORD FOLLOWS
+70 61 73 73 77 6f 72 64     - password
+ff ff 00 00
+
+??? - from switch
+01 04                       - Successfully Logged In
+00 00 00 00 00 00
+00 1d 72 82 22 7b           - MY MAC
+c4 3d c7 81 8b df           - NETGEAR MAC?
+00 00 00 03
+4e 53 44 50                 - NSDP
+00 00 00 00                 - ACCEPTED
+ff ff 00 00
+
+??? to switch
+01 01
+00 00 00 00 00 00
+00 1d 72 82 22 7b           - MY MAC
+c4 3d c7 81 8b df           - NETGEAR MAC?
+00 00 00 04
+4e 53 44 50                 - NSDP
+00 00 00 00
+60 00 00 00                 - HOW MANY PORTS?
+ff ff 00 00
+
+??? from switch
+01 02
+00 00 00 00 00 00
+00 1d 72 82 22 7b               - MY MAC
+c4 3d c7 81 8b df               - NETGEAR MAC?
+00 00 00 04
+4e 53 44 50                     - NSDP
+00 00 00 00
+60 00 00
+01 08                           - port 01 to 08?
+ff ff 00 00
+
+??? to switch
+01 01
+00 00 00 00 00 00
+00 1d 72 82 22 7b               - MY MAC
+c4 3d c7 81 8b df               - NETGEAR MAC?
+00 00 00 05
+4e 53 44 50                     - NSDP
+00 00 00 00
+0c 00 00 00                     - WHAT ARE THE LINK STATUSES?
+ff ff 00 00
+
+??? from switch
+01 02
+00 00 00 00 00 00
+00 1d 72 82 22 7b                       - MY MAC
+c4 3d c7 81 8b df                       - NETGEAR MAC
+00 00 00 05
+4e 53 44 50                             - NSDP
+00 00 00 00
+0c 00 00
+03 01 00 01                             - PORT 1 > NO LINK
+0c 00 00                                - DIVIDER
+03 02 00 01                             - PORT 2 > NO LINK
+0c 00 00                                - DIVIDER
+03 03 05 01                             - PORT 3 > 1000MBIT
+0c 00 00                                - DIVIDER
+03 04 00 01                             - PORT 4 > NO LINK
+0c 00 00                                - DIVIDER
+03 05 05 01                             - PORT 5 > 1000MBIT
+0c 00 00                                - DIVIDER
+03 06 04 01                             - PORT 6 > 100MBIT
+0c 00 00                                - DIVIDER
+03 07 00 01                             - PORT 7 > NO LINK
+0c 00 00                                - DIVIDER
+03 08 05 01                             - PORT 8 > 1000MBIT
+ff ff 00 00
+
+??? to switch
+01 01
+00 00 00 00 00 00
+00 1d 72 82 22 7b                       - MY MAC
+c4 3d c7 81 8b df                       - NETGEAR MAC
+00 00 00 06
+4e 53 44 50                             - NSDP
+00 00 00 00
+74 00 00 00                             - FRAGE NACH?
+ff ff 00 00
+
+??? from switch
+01 02
+00 00 00 00 00 00
+00 1d 72 82 22 7b                       - MY MAC
+c4 3d c7 81 8b df                       - NETGEAR MAC
+00 00 00 06
+4e 53 44 50                             - NSDP
+00 00 00 00
+74 00 00 08                             - ANSWER TO THAT
+00 00 00 00
+1f fc ff ff
+ff ff 00 00
+
+setting switch-name to "elsebswitch": to switch
+ff ff ff ff ff ff 
+00 1d 72 82 22 7b                       - MY MAC
+08 00 45 00
+00 5b 03 66
+00 00 80 11
+73 7e c0 a8
+03 06 ff ff
+ff ff f7 59
+f7 5a 00 47
+c4 06 
+
+01 03
+00 00 00 00 00 00
+00 1d 72 82 22 7b                       - MY MAC
+c4 3d c7 81 8b df                       - NETGEAR MAC
+00 00 00 07
+4e 53 44 50                             - NSDP
+00 00 00 00
+00 0a 00 08                             - PASSWORD FOLLOWS
+70 61 73 73 77 6f 72 64                 - password
+00 03 00 0b                             - NEW SWITCH NAME:
+65 6c 73 65 62 73 77 69 74 63 68        - elsebswitch
+ff ff 00 00
+
+??? from switch
+01 04                                   - Successfully Changed
+00 00 00 00 00 00
+00 1d 72 82 22 7b                       - MY MAC
+c4 3d c7 81 8b df                       - NETGEAR MAC
+00 00 00 07
+4e 53 44 50                             - NSDP
+00 00 00 00                             - ACCEPTED
+ff ff 00 00
+
+change password: to switch
+01 03
+00 00 00 00 00 00
+00 1d 72 82 22 7b                       - MY MAC
+c4 3d c7 81 8b df                       - NETGEAR MAC
+00 00 00 10
+4e 53 44 50                             - NSDP
+00 00 00 00
+00 0a 00 08                             - PASSWORD FOLLOWS
+70 61 73 73 77 6f 72 64                 - password
+00 09 00 08                             - NEW PASS:
+70 61 73 73 77 6f 72 64                 - password
+ff ff 00 00
+
+successfully changed: from switch
+01 04                                   - Successfully Changed
+00 00 00 00 00 00
+00 1d 72 82 22 7b                       - MY MAC
+c4 3d c7 81 8b df                       - NETGEAR MAC
+00 00 00 10
+4e 53 44 50                             - NSDP
+00 00 00 00                             - ACCEPTED
+ff ff 00 00
+}
+ 
