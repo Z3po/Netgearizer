@@ -1,3 +1,7 @@
+#!/usr/bin/python
+# GPL
+# https://github.com/Z3po/Netgearizer
+
 import socket
 import binascii
 import commands
