@@ -12,18 +12,6 @@ DESTIP = '<broadcast>'
 DESTPORT = 63322
 SRCPORT = 63321
 
-# initialize a socket
-# SOCK_DGRAM specifies that this is UDP
-s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
-# set socket options (allows us to send broadcasts)
-s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-
-# set socket timeout
-s.settimeout(0.2)
-
-# bind to SRCPORT
-s.bind(('',SRCPORT))
 
 def get_mac():
     routeresult = commands.getoutput('/sbin/route -n')
@@ -38,6 +26,26 @@ def get_mac():
             break
     return MAC
 
+# global hex data
+transactioncounter = '00000001'
+macaddress = get_mac()
+nsdpheader = 'NSDP'.encode('hex')
+nsdpseperator = '00000000'
+
+# initialize a socket
+# SOCK_DGRAM specifies that this is UDP
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+# set socket options (allows us to send broadcasts)
+s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+
+# set socket timeout
+s.settimeout(0.2)
+
+# bind to SRCPORT
+s.bind(('',SRCPORT))
+
+
 def send_data(senddata):
     # send the data
     s.sendto(senddata,(DESTIP, DESTPORT))
@@ -47,16 +55,81 @@ def send_data(senddata):
     except socket.timeout:
         print 'SOCKET TIMED OUT'
 
+def do_discovery():
+    global transactioncounter
+    discoveryheader = '0101'
+    discoveryansheader = '0102'
+    emptymac = '000000000000'
+    switchtypestart = '00010008'
+    switchtypeend = '0002'
+    switchfirmverstart = '000d0007'
+    switchfirmverend = '000e0000'
+    
+    startdiscoveryresult = send_data(binascii.unhexlify(discoveryheader + emptymac + macaddress + emptymac + transactioncounter + nsdpheader + nsdpseperator + '0001000000020000000300000004000000050000000600000007000000080000000b0000000c0000000d0000000e0000000f000074000000ffff0000'))
+    if startdiscoveryresult != None:
+        result = binascii.hexlify(startdiscoveryresult)
+        if result[:4] == discoveryansheader:
+            print 'got a successfull discovery'
+            result = result[4:]
+            if result[:12] == emptymac:
+                result = result[12:]
+                print 'My Mac is: ' + result[:12]
+                result = result[12:]
+                print 'The Switches MAC is: ' + result[:12]
+                result = result[12:]
+                if result[:8] == transactioncounter:
+                    print 'Is a Reply to my own transaction!'
+                    result = result[8:]
+                    if result[:8] == nsdpheader:
+                        print 'Is a NSDP reply!'
+                        result = result[16:]
+                        if result[:8] == switchtypestart:
+                            result = result[8:]
+                            length = result.find(switchtypeend)
+                            print 'Switchtype: ' + binascii.unhexlify(result[:length])
+                            result = result[length:]
+        else:
+            print 'got a strange reply: ' + result
+
+    
+    transactioncounter = str(int(transactioncounter) + 1).rjust(8,'0')
+    print transactioncounter
+    
+
+    enddiscoveryresult = send_data(binascii.unhexlify(discoveryheader + emptymac + macaddress + emptymac + transactioncounter + nsdpheader + nsdpseperator + '0001000000020000000300000004000000050000000600000007000000080000000b0000000c0000000d0000000e0000000f0000ffff0000'))
+    result = binascii.hexlify(enddiscoveryresult)
+    if result[:4] == discoveryansheader:
+        print 'got a successfull discovery'
+        result = result[4:]
+        if result[:12] == emptymac:
+            result = result[12:]
+            print 'My Mac should be: ' + result[:12]
+            result = result[12:]
+            print 'The Switches MAC is: ' + result[:12]
+            result = result[12:]
+            if result[:8] == transactioncounter:
+                print 'Is a Reply to my own transaction!'
+                result = result[8:]
+                if result[:8] == nsdpheader:
+                    print 'IS a NSDP reply!'
+                    result = result[16:]
+                    if result[:8] == switchtypestart:
+                        result = result[8:]
+                        length = result.find(switchtypeend)
+                        print 'Switchtype: ' + binascii.unhexlify(result[:length])
+                        result = result[length:]
+
+    else:
+        print 'got a strange reply: ' + result
+
+
+
+
+def do_authentication():
+    authenticateheader = '0103'
+    successheader = '0104'
+
+
+
 # MAIN
-macaddress = get_mac()
-discoverydata = '0101'
-emptymac = '000000000000'
-
-# enter the data content of the UDP packet as hex
-firstdiscover = binascii.unhexlify(discoverydata + emptymac + macaddress + emptymac + '00000001' + 'NSDP'.encode('hex') + '000000000001000000020000000300000004000000050000000600000007000000080000000b0000000c0000000d0000000e0000000f000074000000ffff0000')
-seconddiscover = binascii.unhexlify(discoverydata + emptymac + macaddress + emptymac + '00000002' + 'NSDP'.encode('hex') + '000000000001000000020000000300000004000000050000000600000007000000080000000b0000000c0000000d0000000e0000000f0000ffff0000')
-
-data = firstdiscover
-
-result = send_data(data)
-print result
+print do_discovery()
