@@ -27,10 +27,8 @@ def get_mac():
     return MAC
 
 # global hex data
-transactioncounter = '00000001'
+sequence = '00000001'
 macaddress = get_mac()
-nsdpheader = 'NSDP'.encode('hex')
-nsdpseperator = '00000000'
 
 # initialize a socket
 # SOCK_DGRAM specifies that this is UDP
@@ -55,23 +53,36 @@ def send_data(senddata):
     except socket.timeout:
         print 'SOCKET TIMED OUT'
 
+def constructdata(sequence,data,reqtype='0101',mymac='0',destmac='0'):
+    nsdpnoerror = '000000000000'
+    nsdpseperator = '00000000'
+    enddata = 'ffff0000'
+    nsdpheader = 'NSDP'.encode('hex')
+    data = reqtype 
+    data += nsdpnoerror + mymac.rjust(12,'0') + destmac.rjust(12,'0') 
+    data += sequence + nsdpheader + nsdpseperator 
+    data += data
+    data += enddata
+    return data
+
+
 def do_discovery():
-    global transactioncounter
+    global sequence
     discoveryheader = '0101'
     discoveryansheader = '0102'
-    emptymac = '000000000000'
     switchtypestart = '00010008'
     switchtypeend = '0002'
     switchfirmverstart = '000d0007'
     switchfirmverend = '000e0000'
     
-    startdiscoveryresult = send_data(binascii.unhexlify(discoveryheader + emptymac + macaddress + emptymac + transactioncounter + nsdpheader + nsdpseperator + '0001000000020000000300000004000000050000000600000007000000080000000b0000000c0000000d0000000e0000000f000074000000ffff0000'))
-    if startdiscoveryresult != None:
-        result = binascii.hexlify(startdiscoveryresult)
+    discoverydata = constructdata(sequence,'0001000000020000000300000004000000050000000600000007000000080000000b0000000c0000000d0000000e0000000f000074000000',discoveryheader,macaddress)
+    discoveryresult = send_data(binascii.unhexlify(discoverydata))
+    if discoveryresult != None:
+        result = binascii.hexlify(discoveryresult)
         if result[:4] == discoveryansheader:
             print 'got a successfull discovery'
             result = result[4:]
-            if result[:12] == emptymac:
+            if result[:12] == '000000000000':
                 result = result[12:]
                 print 'My Mac is: ' + result[:12]
                 result = result[12:]
@@ -80,7 +91,7 @@ def do_discovery():
                 if result[:8] == transactioncounter:
                     print 'Is a Reply to my own transaction!'
                     result = result[8:]
-                    if result[:8] == nsdpheader:
+                    if result[:8] == '00000000':
                         print 'Is a NSDP reply!'
                         result = result[16:]
                         if result[:8] == switchtypestart:
@@ -92,16 +103,15 @@ def do_discovery():
             print 'got a strange reply: ' + result
 
     
-    transactioncounter = str(int(transactioncounter) + 1).rjust(8,'0')
-    print transactioncounter
-    
+    sequence = hex(int(sequence) + 1)[2:].rjust(8,'0')
 
-    enddiscoveryresult = send_data(binascii.unhexlify(discoveryheader + emptymac + macaddress + emptymac + transactioncounter + nsdpheader + nsdpseperator + '0001000000020000000300000004000000050000000600000007000000080000000b0000000c0000000d0000000e0000000f0000ffff0000'))
+    discoverydata = constructdata(sequence,'0001000000020000000300000004000000050000000600000007000000080000000b0000000c0000000d0000000e0000000f0000',discoveryheader,macaddress)
+    enddiscoveryresult = send_data(binascii.unhexlify(discoverydata))
     result = binascii.hexlify(enddiscoveryresult)
     if result[:4] == discoveryansheader:
         print 'got a successfull discovery'
         result = result[4:]
-        if result[:12] == emptymac:
+        if result[:12] == '000000000000':
             result = result[12:]
             print 'My Mac should be: ' + result[:12]
             result = result[12:]
@@ -110,7 +120,7 @@ def do_discovery():
             if result[:8] == transactioncounter:
                 print 'Is a Reply to my own transaction!'
                 result = result[8:]
-                if result[:8] == nsdpheader:
+                if result[:8] == '00000000':
                     print 'IS a NSDP reply!'
                     result = result[16:]
                     if result[:8] == switchtypestart:
@@ -132,4 +142,6 @@ def do_authentication():
 
 
 # MAIN
-print do_discovery()
+do_discovery()
+
+s.close()
