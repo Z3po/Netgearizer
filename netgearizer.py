@@ -29,10 +29,20 @@ def get_mac():
 sequence = '00000000'
 mymac = get_mac()
 destmac = '000000000000'
-unprivilegedreq = '0101'
-unprivilegedans = '0102'
-privilegedreq = '0103'
-privilegedans = '0104'
+unprivilegedrequest = '0101'
+unprivilegedanswer = '0102'
+privilegedrequest = '0103'
+privilegedanswer = '0104'
+
+switchattributes = { 'switch-type' : ('0001','string'), 
+                    'switch-name' : ('0003','string'), 'switch-mac' : ('0004','mac'), 
+                    'switch-ip' : ('0006','ip'), 
+                    'switch-netmask' : ('0007','ip'), 'switch-gateway' : ('0008','ip'), 
+                    'switch-password' : ('000a', 'string'),
+                    'switch-port-statuses' : ('0c00', 'port-status'),
+                    'switch-firmware' : ('000d','string'),
+                    'switch-port-count' : ('6000','raw')}
+
 
 # initialize a socket
 # SOCK_DGRAM specifies that this is UDP
@@ -47,7 +57,8 @@ s.settimeout(0.2)
 # bind to SRCPORT
 s.bind(('',SRCPORT))
 
-def send_data(senddata):
+def send_data(senddata): # {{{
+    """Send the data out via SOCKET"""
     # send the data
     s.sendto(senddata,(DESTIP, DESTPORT))
     try:
@@ -55,8 +66,10 @@ def send_data(senddata):
         return result
     except socket.timeout:
         print 'SOCKET TIMED OUT'
+# }}}
 
-def senddata(reqtype,mymac,datalist):
+def senddata(reqtype,datalist): # {{{
+    """This function builds the data to send them out via send_data"""
     increase_sequence()
     nsdpnoerror = '000000000000'
     nsdpseperator = '00000000'
@@ -65,22 +78,37 @@ def senddata(reqtype,mymac,datalist):
     data = reqtype 
     data += nsdpnoerror + mymac + destmac 
     data += sequence + nsdpheader + nsdpseperator 
-    for datapair in datalist:
-        if len(datapair[1]) < 2:
+    if isinstance(datalist[0], tuple):
+        for datapair in datalist:
+            if len(datapair[1]) < 2:
+                length=0
+            else:
+                length=len(datapair[1])/2
+            data += datapair[0] + hex(length)[2:].rjust(4,'0')
+            data += datapair[1]
+        data += enddata
+        result = send_data(binascii.unhexlify(data))
+    else:
+        if len(datalist[1]) < 2:
             length=0
         else:
-            length=len(datapair[1])/2
-        data += datapair[0] + hex(length)[2:].rjust(4,'0')
-        data += datapair[1]
-    data += enddata
-    result = send_data(binascii.unhexlify(data))
+            length=len(datalist[1])/2
+        data += datalist[0] + hex(length)[2:].rjust(4,'0')
+        data += datalist[1]
+        data += enddata
+        result = send_data(binascii.unhexlify(data))
     return result
+# }}}
 
-def parsedata(hexdata):
-    if hexdata == None:
+def parsedata(hexvalue): # {{{
+    """This function parses the hexdata we get back from the switch.
+    hexvalue : hexvalue from the switch
+    returns : a dictionary with the parse results
+    """
+    if hexvalue == None:
             dataresult = { 'ERROR' : 'NO RESULT' }
             return dataresult
-    data = binascii.hexlify(hexdata)
+    data = binascii.hexlify(hexvalue)
     nsdpnoerror = '000000000000'
     dataresult = { 'packettype' : data[:4] }
     data = data[4:]
@@ -102,117 +130,129 @@ def parsedata(hexdata):
         else:
             print 'Not a result to my sequence!'
     else:
-        dataresult.update({ 'ERROR' : data[:12] })
+        dataresult.update({ 'ERROR' : data[7:10] })
     return dataresult
+# }}}
 
-def hex_to_ip(hexvalue):
-    ip = str(int('0x' + hexvalue[:2],0)) + '.' + str(int('0x' + hexvalue[2:4],0)) + '.' + str(int('0x' + hexvalue[4:6],0)) + '.' + str(int('0x' + hexvalue[6:8],0))
-    return ip
+def convert_hex(hexvalue, target): # {{{
+    """This function converts hexdata to a target type
+    hexvalue : the value we want to convert
+    target : target type, any of 'ip', 'string', 'cipher', 'mac'
+    """
+    if target == 'ip':
+        result = str(int('0x' + hexvalue[:2],0)) + '.' + str(int('0x' + hexvalue[2:4],0)) + '.' + str(int('0x' + hexvalue[4:6],0)) + '.' + str(int('0x' + hexvalue[6:8],0))
+    elif target == 'string':
+        result = binascii.unhexlify(hexvalue)
+    elif target == 'cipher':
+        result = int(hexvalue, 16)
+    elif target == 'mac':
+        result = ''
+        while len(hexvalue) > 2:
+            result += hexvalue[:2] + ':'
+            hexvalue = hexvalue[2:]
+        result += hexvalue
+    elif target == 'port-status':
+        result = []
+        for port in hexvalue:
+            if port[2:4] == '05':
+                linkstat = '1000MBIT'
+            elif port[2:4] == '04':
+                linkstat = '100MBIT'
+            elif port[2:4] == '03':
+                linkstat = '10MBIT'
+            elif port[2:4] == '00':
+                linkstat = 'NO LINK'
+            else:
+                linkstat = 'UNKNOWN'
+            result.append(( 'Port ' + str(port[:2]), linkstat))
 
-def hex_to_text(hexvalue):
-    text = binascii.unhexlify(hexvalue)
-    return text
+    else:
+        result = hexvalue
 
-def increase_sequence():
+    return result
+# }}}
+
+def increase_sequence(): # {{{
+    """This function does nothing than increase the sequence number we use"""
     global sequence
     sequence = hex(int(sequence) + 1)[2:].rjust(8,'0')
+# }}}
 
-
-def do_discovery():
+def print_result(result): # {{{
     global destmac
-    switchtype = '0001'
-    switchname = '0003'
-    switchmac = '0004'
-    switchip = '0006'
-    switchnetmask = '0007'
-    switchgateway = '0008'
-    switchfirmver = '000d'
-    
-    startdiscoveryresult = senddata(unprivilegedreq,mymac,(('0001',''),('0002',''),('0003',''),('0004',''),('0005',''),('0006',''),('0007',''),('0008',''),('000b',''),('000c',''),('000d',''),('000e',''),('000f',''),('7400','')))
-    resultdict = parsedata(startdiscoveryresult)
-
-    enddiscoveryresult = senddata(unprivilegedreq,mymac,(('0001',''),('0002',''),('0003',''),('0004',''),('0005',''),('0006',''),('0007',''),('0008',''),('000b',''),('000c',''),('000d',''),('000e',''),('000f','')))
-    resultdict = parsedata(enddiscoveryresult)
-
+    resultdict = parsedata(result)
 
     if 'ERROR' in resultdict:
+        if resultdict['ERROR'] in switchattributes.key():
+            print 'ERROR with ' + switchattributes[resultdict['ERROR']]
         print 'ERROR: ' + resultdict['ERROR']
+    elif resultdict['packettype'] == privilegedanswer:
+        print 'Successfull'
     else:
-        if resultdict['packettype'] == unprivilegedans:
-            if switchtype in resultdict:
-                print 'switch type: ' + hex_to_text(resultdict[switchtype])
-            if switchname in resultdict:
-                print 'switch name: ' + hex_to_text(resultdict[switchname])
-            if switchmac in resultdict:
-                print 'switch mac: ' + resultdict[switchmac]
-                destmac = resultdict[switchmac]
-            if switchip in resultdict:
-                print 'switch ip: ' + hex_to_ip(resultdict[switchip])
-            if switchnetmask in resultdict:
-                print 'switch netmask: ' + hex_to_ip(resultdict[switchnetmask])
-            if switchgateway in resultdict:
-                print 'switch gateway: ' + hex_to_ip(resultdict[switchgateway])
-            if switchfirmver in resultdict:
-                print 'switch firmware version: ' + hex_to_text(resultdict[switchfirmver])
-        else:
-            print 'not our reply!'
+        for key in switchattributes.keys():
+            if switchattributes[key][0] in resultdict:
+                if key == 'switch-mac':
+                   destmac = resultdict[switchattributes[key][0]]
+                convertdata = convert_hex(resultdict[switchattributes[key][0]],switchattributes[key][1])
+                if type(convertdata).__name__ == 'list':
+                    print key + ': '
+                    for element in convertdata:
+                        print ' -> ' + element[0] + ': ' + element[1]
+                else:
+                    print key + ': ' + convertdata
+# }}}
 
-def do_authenticate(password):
-    authenticationresult = senddata(privilegedreq,mymac,(('000a',password.encode('hex')),))
-    resultdict = parsedata(authenticationresult)
+def do_discovery(): # {{{
+    """This function discovers the available switches"""
+    # Discovery needs two different requests...i have no idea why..
+    discoveryresult = senddata(unprivilegedrequest,(('0001',''),('0002',''),('0003',''),('0004',''),('0005',''),('0006',''),('0007',''),('0008',''),('000b',''),('000c',''),('000d',''),('000e',''),('000f',''),('7400','')))
 
-    if 'ERROR' in resultdict:
-        print 'ERROR: ' + resultdict['ERROR']
-    else:
-        if resultdict['packettype'] == privilegedans:
-            print 'Successfully authenticated!'
-        else:
-            print 'not our reply!'
+    discoveryresult = senddata(unprivilegedrequest,(('0001',''),('0002',''),('0003',''),('0004',''),('0005',''),('0006',''),('0007',''),('0008',''),('000b',''),('000c',''),('000d',''),('000e',''),('000f','')))
+    # 
+    print_result(discoveryresult)
+# }}}
 
-def do_getPortCount():
-    portcount = '6000'
+def do_authenticate(password): # {{{
+    """This function tries to authenticate to the switch
+    password : the password to try
+    """
+    print 'Authenticating...'
+    authenticationresult = senddata(privilegedrequest,(switchattributes['switch-password'][0],password.encode('hex')))
+    print_result(authenticationresult)
+# }}}
 
-    portstatsresult = senddata(unprivilegedreq,mymac,((portcount,''),))
-    resultdict = parsedata(portstatsresult)
+def do_getPortCount(): # {{{
+    """This function returns the numbers of ports available"""
 
-    if 'ERROR' in resultdict:
-        print 'ERROR: ' + resultdict['ERROR']
-    else:
-        if resultdict['packettype'] == unprivilegedans:
-            if portcount in resultdict:
-                print 'Number of Switch ports: ' + resultdict[portcount]
-            else:
-                print 'No valid number of switch ports found'
-        else:
-            print 'not our reply!'
+    result = senddata(unprivilegedrequest,((switchattributes['switch-port-count'][0],''),))
+    print_result(result)
+# }}}
 
-def do_getLinkStatus():
+def do_getLinkStatus(): # {{{
+    """This function returns the actual link statuses of all ports"""
     linkstatus = '0c00'
-    portstatsresult = senddata(unprivilegedreq,mymac,((linkstatus,''),))
-    resultdict = parsedata(portstatsresult)
+    result = senddata(unprivilegedrequest,((linkstatus,''),))
 
-    if 'ERROR' in resultdict:
-        print 'ERROR: ' + resultdict['ERROR']
-    else:
-        if resultdict['packettype'] == unprivilegedans:
-            if linkstatus in resultdict:
-                for port in resultdict[linkstatus]:
-                    if port[2:4] == '05':
-                        linkstat = '1000MBIT'
-                    elif port[2:4] == '04':
-                        linkstat = '100MBIT'
-                    elif port[2:4] == '03':
-                        linkstat = '10MBIT'
-                    elif port[2:4] == '00':
-                        linkstat = 'NO LINK'
-                    print port[:2] + ': ' + linkstat
+    print_result(result)
+# }}}
 
+def do_getPortCounter():
+    testresult = senddata(unprivilegedrequest,('1000',''))
+    print str(binascii.hexlify(testresult))
+    resultdict = parsedata(testresult)
+
+    for key in resultdict.keys():
+        print key + ' ' + str(resultdict[key])
 
 # MAIN
 do_discovery()
 print '#########'
 do_authenticate('password')
 print '#########'
+do_getPortCount()
+print '#########'
 do_getLinkStatus()
+print '#########'
+do_getPortCounter()
 
 s.close()
