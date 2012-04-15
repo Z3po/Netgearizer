@@ -6,13 +6,15 @@ import socket
 import binascii
 import commands
 import re
+from sys import exit
 
 # addressing information
 DESTIP = '<broadcast>'
 DESTPORT = 63322
 SRCPORT = 63321
 
-def get_mac():
+def get_mac(): # {{{
+    """This function is needed to get the local mac address"""
     routeresult = commands.getoutput('/sbin/route -n')
     for line in routeresult.split('\n'):
         if re.match('0\.0\.0\.0.*',line):
@@ -24,6 +26,7 @@ def get_mac():
             MAC = re.sub(':','',line.split()[-1])
             break
     return MAC
+# }}}
 
 # global hex data
 sequence = '00000000'
@@ -41,6 +44,7 @@ switchattributes = { 'switch-type' : ('0001','string'),
                     'switch-password' : ('000a', 'string'),
                     'switch-port-statuses' : ('0c00', 'port-status'),
                     'switch-firmware' : ('000d','string'),
+                    'switch-port-counter' : ('1000','port-counter'),
                     'switch-port-count' : ('6000','raw')}
 
 
@@ -66,6 +70,8 @@ def send_data(senddata): # {{{
         return result
     except socket.timeout:
         print 'SOCKET TIMED OUT'
+        print 'Are you connected to the switch?'
+        exit(2)
 # }}}
 
 def senddata(reqtype,datalist): # {{{
@@ -144,7 +150,7 @@ def convert_hex(hexvalue, target): # {{{
     elif target == 'string':
         result = binascii.unhexlify(hexvalue)
     elif target == 'cipher':
-        result = int(hexvalue, 16)
+        result = str(int(hexvalue, 16))
     elif target == 'mac':
         result = ''
         while len(hexvalue) > 2:
@@ -165,7 +171,12 @@ def convert_hex(hexvalue, target): # {{{
             else:
                 linkstat = 'UNKNOWN'
             result.append(( 'Port ' + str(port[:2]), linkstat))
-
+    elif target == 'port-counter':
+        result = []
+        for port in hexvalue:
+            sendstats = convert_hex(port[2:18],'cipher')
+            receivestats = convert_hex(port[19:35],'cipher')
+            result.append(( 'Port ' + str(port[:2]), (('send', sendstats), ('receive', receivestats))))
     else:
         result = hexvalue
 
@@ -179,6 +190,9 @@ def increase_sequence(): # {{{
 # }}}
 
 def print_result(result): # {{{
+    """This function prints the results
+    result: hexvalue we get from the switch
+    """
     global destmac
     resultdict = parsedata(result)
 
@@ -197,7 +211,12 @@ def print_result(result): # {{{
                 if type(convertdata).__name__ == 'list':
                     print key + ': '
                     for element in convertdata:
-                        print ' -> ' + element[0] + ': ' + element[1]
+                        if type(element[1]).__name__ == 'tuple':
+                            print ' -> ' + element[0] + ': '
+                            for data in element[1]:
+                                print '   >> ' + data[0] + ': ' + data[1]
+                        else:
+                            print ' -> ' + element[0] + ': ' + element[1]
                 else:
                     print key + ': ' + convertdata
 # }}}
@@ -236,13 +255,10 @@ def do_getLinkStatus(): # {{{
     print_result(result)
 # }}}
 
-def do_getPortCounter():
-    testresult = senddata(unprivilegedrequest,('1000',''))
-    print str(binascii.hexlify(testresult))
-    resultdict = parsedata(testresult)
-
-    for key in resultdict.keys():
-        print key + ' ' + str(resultdict[key])
+def do_getPortCounter(): # {{{
+    result = senddata(unprivilegedrequest,('1000',''))
+    print_result(result)
+# }}}
 
 # MAIN
 do_discovery()
