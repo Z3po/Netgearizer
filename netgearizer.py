@@ -20,10 +20,10 @@ class SwitchConfig(cmd.Cmd):
     sequence = '00000000'
     mymac = ''
     destmac = '000000000000'
-    unprivilegedrequest = '0101'
-    privilegedrequest = '0103'
     privilegedanswer = '0104'
-    password = ''
+    password = None
+    portmirrorvalues = ('80','40','20','10','08','04','02','01')
+
     
     switchattributes = { 'switch-type' : ('0001','string'),
                         'switch-name' : ('0003','string'), 'switch-mac' : ('0004','mac'),
@@ -33,8 +33,9 @@ class SwitchConfig(cmd.Cmd):
                         'switch-password' : ('000a', 'string'), 'switch-dhcp' : ('000b', 'dhcpoption'),
                         'switch-port-statuses' : ('0c00', 'port-status'),
                         'switch-firmware' : ('000d','string'),
-                        'switch-port-counter' : ('1000','port-counter'),
-                        'switch-port-count' : ('6000','raw')}
+                        'switch-restart' : ('0013','raw'), 'switch-factory-reset' : ('0400','raw'),
+                        'switch-port-counter' : ('1000','port-counter'), 'switch-port-counter-reset' : ('1400','raw'),
+                        'switch-port-mirror' : ('5c00', 'port-mirror'), 'switch-port-count' : ('6000','cipher')}
     
     
     def __init__(self):
@@ -93,12 +94,15 @@ class SwitchConfig(cmd.Cmd):
         nsdpseperator = '00000000'
         enddata = 'ffff0000'
         nsdpheader = 'NSDP'.encode('hex')
-        data = reqtype
+        if reqtype == 'set':
+            data = '0103'
+        elif reqtype == 'get':
+            data = '0101'
     
         data += nsdpnoerror + self.mymac + self.destmac 
         data += self.sequence + nsdpheader + nsdpseperator 
-        if reqtype == self.privilegedrequest:
-            if len(self.password) == 0:
+        if reqtype == 'set':
+            if self.password == None:
                 print 'Please authenticate first'
                 return None
             else:
@@ -129,9 +133,9 @@ class SwitchConfig(cmd.Cmd):
     def __switchDiscovery(self): # {{{
         """This function discovers the available switches"""
         # Discovery needs two different requests...i have no idea why..
-        discoveryresult = self.__sendData(self.unprivilegedrequest,(('0001',''),('0002',''),('0003',''),('0004',''),('0005',''),('0006',''),('0007',''),('0008',''),('000b',''),('000c',''),('000d',''),('000e',''),('000f',''),('7400','')))
+        discoveryresult = self.__sendData('get',(('0001',''),('0002',''),('0003',''),('0004',''),('0005',''),('0006',''),('0007',''),('0008',''),('000b',''),('000c',''),('000d',''),('000e',''),('000f',''),('7400','')))
     
-        discoveryresult = self.__sendData(self.unprivilegedrequest,(('0001',''),('0002',''),('0003',''),('0004',''),('0005',''),('0006',''),('0007',''),('0008',''),('000b',''),('000c',''),('000d',''),('000e',''),('000f','')))
+        discoveryresult = self.__sendData('get',(('0001',''),('0002',''),('0003',''),('0004',''),('0005',''),('0006',''),('0007',''),('0008',''),('000b',''),('000c',''),('000d',''),('000e',''),('000f','')))
     
         self.__printResult(discoveryresult)
     # }}}
@@ -207,6 +211,14 @@ target : target type, any of 'ip', 'string', 'cipher', 'mac'
                 else:
                     linkstat = 'UNKNOWN'
                 result.append(( 'Port ' + str(port[:2]), linkstat))
+        elif target == 'port-mirror':
+            toPort = hexvalue[0:2]
+            if toPort == '00':
+                result = 'disabled'
+            else:
+                fromPort = str(self.portmirrorvalues.index(hexvalue[4:8]) + 1).rjust(2,'0')
+                result = [ ( 'from Port', fromPort ),
+                           ( 'toPort', toPort )]
         elif target == 'port-counter':
             result = []
             for port in hexvalue:
@@ -261,6 +273,20 @@ result: hexvalue we get from the switch
                         print key + ': ' + convertdata
     # }}}
 
+    def __splitLine(self,argumentcount,line): # {{{
+        splitline = line.split()
+        if len(splitline) > argumentcount:
+            print 'Too many arguments!'
+            return False
+        else:
+            if len(splitline) < argumentcount:
+                count=len(splitline)
+                while count < argumentcount:
+                    splitline.append(None)
+                    count += 1
+            return splitline
+    # }}}
+
     def do_quit(self, line): # {{{
         """Quit the application"""
         return True
@@ -274,26 +300,26 @@ result: hexvalue we get from the switch
         print 'well...are you kidding me?'
     # }}}
 
-    def do_discovery(self, line): # {{{
+    def do_authenticate(self, line): # {{{
+        """try to authenticate to the switch.
+Syntax: authenticate $password
+$password : the password to try"""
+        self.password = line.encode('hex')
+        print 'Authenticating...'
+        result = self.__sendData('set',(self.switchattributes['switch-password'][0],self.password.encode('hex')))
+        self.__printResult(result)
+    # }}}
+    
+    def do_getSwitches(self, line): # {{{
         """Discover all available switches again.
 Syntax: discovery"""
         self.__switchDiscovery()
     # }}}
 
-    def do_authenticate(self, __password): # {{{
-        """try to authenticate to the switch.
-Syntax: authenticate $password
-$password : the password to try"""
-        self.password = __password.encode('hex')
-        print 'Authenticating...'
-        result = self.__sendData(self.privilegedrequest,(self.switchattributes['switch-password'][0],__password.encode('hex')))
-        self.__printResult(result)
-    # }}}
-    
     def do_getPortCount(self, line): # {{{
         """return the numbers of ports available.
 Syntax: getPortCount"""
-        result = self.__sendData(self.unprivilegedrequest,((self.switchattributes['switch-port-count'][0],''),))
+        result = self.__sendData('get',((self.switchattributes['switch-port-count'][0],''),))
         self.__printResult(result)
     # }}}
     
@@ -301,7 +327,7 @@ Syntax: getPortCount"""
         """return link statuses of all ports.
 Syntax: getLinkStatus"""
         linkstatus = '0c00'
-        result = self.__sendData(self.unprivilegedrequest,((linkstatus,''),))
+        result = self.__sendData('get',((linkstatus,''),))
     
         self.__printResult(result)
     # }}}
@@ -309,37 +335,49 @@ Syntax: getLinkStatus"""
     def do_getPortStatistics(self, line): # {{{
         """show port statistics.
 Syntax: getPortStatistics"""
-        result = self.__sendData(self.unprivilegedrequest,('1000',''))
+        result = self.__sendData('get',('1000',''))
         self.__printResult(result)
     # }}}
-    
-    def do_setSwitchName(self, name): # {{{
-        """set the switch name.
-Syntax: setSwitchName $name
-->$name : the name to set"""
-        print 'Setting Switch Name...'
-        result = self.__sendData(self.privilegedrequest,(self.switchattributes['switch-name'][0],name.encode('hex')))
-        self.__printResult(result)
-    # }}}
-    
-    def do_setPassword(self, password): # {{{
-        """change the switch password.
-Syntax: setPassword $password
-->$password : the password to set"""
-        print 'Setting Password...'
-        result = self.__sendData(self.privilegedrequest,(self.switchattributes['new-switch-password'][0],password.encode('hex')))
+ 
+    def do_getPortMirror(self, line): # {{{
+        """show port mirror setup.
+Syntax: getPortMirror"""
+        result = self.__sendData('get',(self.switchattributes['switch-port-mirror'][0],''))
         self.__printResult(result)
     # }}}
 
-    def do_setDHCP(self, option, ip=None, gateway=None, netmask=None): # {{{
+    def do_setSwitchName(self, line): # {{{
+        """set the switch name.
+Syntax: setSwitchName $name
+->$name : the name to set"""
+        name = self.__splitLine(1,line)
+        if not name:
+            return False
+        print 'Setting Switch Name...'
+        result = self.__sendData('set',(self.switchattributes['switch-name'][0],name.encode('hex')))
+        self.__printResult(result)
+    # }}}
+    
+    def do_setPassword(self, line): # {{{
+        """change the switch password.
+Syntax: setPassword $password
+->$password : the password to set"""
+        password = self.__splitLine(1,line)
+        print 'Setting Password...'
+        result = self.__sendData('set',(self.switchattributes['new-switch-password'][0],password.encode('hex')))
+        self.__printResult(result)
+    # }}}
+
+    def do_setDHCP(self, line): # {{{
         """change the DHCP settings.
 Syntax: setDHCP $option
 ->$option : any of - disable, enable, renew"""
+        option, ip, gateway, netmask = self.__splitLine(4,line)
         print 'Setting DHCP option...'
         if option == 'renew':
-            result = self.__sendData(self.privilegedrequest,(self.switchattributes['switch-dhcp'][0],'02'))
+            setvalue='02'
         elif option == 'enable':
-            result = self.__sendData(self.privilegedrequest,(self.switchattributes['switch-dhcp'][0],'01'))
+            setvalue='01'
         elif option == 'disable':
             if ip is not None and gateway is not None and netmask is not None:
 #                result = self.__sendData(self.privilegedrequest,((self.switchattributes['switch-ip'][0],ip.encode('hex')),
@@ -347,12 +385,55 @@ Syntax: setDHCP $option
 #                (self.switchattributes['switch-dhcp'][0],'00')))
                 pass
             else:
-                result = self.__sendData(self.privilegedrequest,(self.switchattributes['switch-dhcp'][0],'00'))
+                setvalue='00'
         else:
             print 'please use any of: renew, enable, disable'
             return False
+        result = self.__sendData('set',(self.switchattributes['switch-dhcp'][0],setvalue))
         self.__printResult(result)
      # }}}
+
+    def do_setRestart(self, line): # {{{
+        """"restart the switch (or not).
+Syntax: setRestart"""
+        print 'Restarting switch...'
+        result = self.__sendData('set',(self.switchattributes['switch-restart'][0],'01'))
+        self.__printResult(result)
+    # }}}
+
+    def do_setFactoryDefaults(self, line): # {{{
+        """reset to factory defaults.
+Syntax: setFactoryDefaults"""
+        result = self.__sendData('set',(self.switchattributes['switch-factory-reset'][0], '01'))
+        self.__printResult(result)
+    # }}}
+
+    def do_setResetPortStatistic(self, line): # {{{
+        """reset port counters.
+Syntax: setPortCounterReset"""
+        result = self.__sendData('set',(self.switchattributes['switch-port-counter-reset'][0], '01'))
+        self.__printResult(result)
+    # }}}
+
+    def do_setPortMirror(self, line): # {{{
+        """set port mirror.
+Syntax: setPortMirror $option $fromPort $toPort
+->$option : enable/disable
+->$fromPort : the port you want to mirror
+->$toPort : the port you want to mirror to"""
+        option, fromPort, toPort = self.__splitLine(3,line)
+        if option == 'enable':
+            if fromPort == None or toPort == None:
+                print 'please set fromPort and toPort'
+                return False
+            result = self.__sendData('set',(self.switchattributes['switch-port-mirror'][0], toPort.rjust(2,'0') + '00' + self.portmirrorvalues[int(fromPort)-1]))
+            self.__printResult(result)
+        elif option == 'disable':
+            result = self.__sendData('set',(self.switchattributes['switch-port-mirror'][0], '000000'))
+            self.__printResult(result)
+        else:
+            print 'please use enable or disable as option'
+    # }}}
 
 if __name__ == '__main__':
     SwitchConfig().cmdloop()
