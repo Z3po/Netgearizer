@@ -24,6 +24,10 @@ class SwitchConfig(cmd.Cmd):
     password = None
     portmirrorvalues = ('80','40','20','10','08','04','02','01')
 
+    # selected switch
+    selectedSwitch = None
+    switchList = None
+    discoveryrequest = False
     
     switchattributes = { 'switch-type' : ('0001','string'),
                         'switch-name' : ('0003','string'), 'switch-mac' : ('0004','mac'),
@@ -38,7 +42,7 @@ class SwitchConfig(cmd.Cmd):
                         'switch-port-mirror' : ('5c00', 'port-mirror'), 'switch-port-count' : ('6000','cipher')}
     
     
-    def __init__(self):
+    def __init__(self): # {{{
         cmd.Cmd.__init__(self)
         # get own mac address
         self.mymac = self.__getMac()
@@ -53,6 +57,7 @@ class SwitchConfig(cmd.Cmd):
         self.connection.bind(('',self.SRCPORT))
         # do discovery
         self.__switchDiscovery()
+    # }}}
 
     def __del__(self): # {{{
         """Destructor"""
@@ -77,18 +82,32 @@ class SwitchConfig(cmd.Cmd):
     def __socketSend(self, __sendData): # {{{
         """Send the data out via SOCKET"""
         # send the data
+        data = None
+        self.switches = {}
         self.connection.sendto(__sendData,(self.DESTIP, self.DESTPORT))
         try:
-            result = self.connection.recv(4096)
-            return result
+            while True:
+                data, server = self.connection.recvfrom(1024)
+                server = server[0]
+
+                if not data: break
+                if server in self.switches:
+                    self.switches[server] += data
+                else:
+                    self.switches.update({ server : data })
+            return True
         except socket.timeout:
-            print 'SOCKET TIMED OUT'
-            print 'Are you connected to the switch?'
-            exit(2)
+            if data == None:
+                print 'SOCKET TIMED OUT'
+                print 'Are you connected to the switch?'
+                exit(2)
+            else:
+                return True
     # }}}
  
     def __sendData(self, reqtype,datalist): # {{{
         """This function builds the data to send them out via __socketSend"""
+        self.switches = {}
         self.__increaseSequence()
         nsdpnoerror = '000000000000'
         nsdpseperator = '00000000'
@@ -132,6 +151,9 @@ class SwitchConfig(cmd.Cmd):
 
     def __switchDiscovery(self): # {{{
         """This function discovers the available switches"""
+
+        self.selectedSwitch = None
+        self.discoveryrequest = True
         # Discovery needs two different requests...i have no idea why..
         discoveryresult = self.__sendData('get',(('0001',''),('0002',''),('0003',''),('0004',''),('0005',''),('0006',''),('0007',''),('0008',''),('000b',''),('000c',''),('000d',''),('000e',''),('000f',''),('7400','')))
     
@@ -241,8 +263,30 @@ target : target type, any of 'ip', 'string', 'cipher', 'mac'
         """This function prints the results
 result: hexvalue we get from the switch
         """
-        resultdict = self.__parseData(result)
-    
+        if not result:
+            print 'Something is wrong....'
+            return False
+
+        if self.selectedSwitch != None:
+            resultdict = self.__parseData(self.switches[self.selectedSwitch])
+        else:
+            if self.discoveryrequest:
+                self.discoveryrequest = False
+                self.switchList = []
+                counter = 0
+                print 'please select one of the following switches with selectSwitch'
+                for key in self.switches.keys():
+                    self.switchList.append(key)
+                    print '--> ' + str(counter) + ': ' + key
+                    print 'Information: '
+                    self.selectedSwitch = key
+                    self.__printResult(True)
+                    self.selectedSwitch = None
+                    return True
+            else:
+                print 'please select one of the switches you get with getSwitches first.'
+                return False
+
         if 'ERROR' in resultdict:
             found = None
             for key in  self.switchattributes.keys():
@@ -284,6 +328,8 @@ result: hexvalue we get from the switch
                 while count < argumentcount:
                     splitline.append(None)
                     count += 1
+            elif argumentcount == 1:
+                return splitline[0]
             return splitline
     # }}}
 
@@ -298,6 +344,19 @@ result: hexvalue we get from the switch
 
     def help_help(line): # {{{
         print 'well...are you kidding me?'
+    # }}}
+
+    def do_selectSwitch(self, line): # {{{
+        element = self.__splitLine(1,line)
+        if self.switchList == None:
+            print 'please do getSwitches first..'
+        else:
+            try:
+                self.selectedSwitch = self.switchList[int(element)]
+            except IndexError:
+                print 'please use a valid element'
+                print 'use getSwitches to get a valid list of elements'
+                return False
     # }}}
 
     def do_authenticate(self, line): # {{{
