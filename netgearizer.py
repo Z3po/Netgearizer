@@ -9,7 +9,7 @@ import re
 import cmd
 from sys import exit
 
-class SwitchConfig(cmd.Cmd):
+class NetgearConfig(cmd.Cmd):
     
     # addressing information
     DESTIP = '<broadcast>'
@@ -65,7 +65,7 @@ class SwitchConfig(cmd.Cmd):
     # }}}
  
     def __getMac(self): # {{{
-        """This function is needed to get the local mac address"""
+        """This function tries to determine the local mac address"""
         routeresult = commands.getoutput('/sbin/route -n')
         for line in routeresult.split('\n'):
             if re.match('0\.0\.0\.0.*',line):
@@ -118,8 +118,11 @@ class SwitchConfig(cmd.Cmd):
         elif reqtype == 'get':
             data = '0101'
     
-        data += nsdpnoerror + self.mymac + self.destmac 
-        data += self.sequence + nsdpheader + nsdpseperator 
+        if not self.discoveryrequest and self.selectedSwitch == None:
+            print 'please select one of the switches you get with getSwitches first.'
+            return None
+        data += nsdpnoerror + self.mymac + self.destmac
+        data += self.sequence + nsdpheader + nsdpseperator
         if reqtype == 'set':
             if self.password == None:
                 print 'Please authenticate first'
@@ -135,8 +138,6 @@ class SwitchConfig(cmd.Cmd):
                     length=len(datapair[1])/2
                 data += datapair[0] + hex(length)[2:].rjust(4,'0')
                 data += datapair[1]
-            data += enddata
-            result = self.__socketSend(binascii.unhexlify(data))
         else:
             if len(datalist[1]) < 2:
                 length=0
@@ -144,14 +145,13 @@ class SwitchConfig(cmd.Cmd):
                 length=len(datalist[1])/2
             data += datalist[0] + hex(length)[2:].rjust(4,'0')
             data += datalist[1]
-            data += enddata
-            result = self.__socketSend(binascii.unhexlify(data))
+        data += enddata
+        result = self.__socketSend(binascii.unhexlify(data))
         return result
     # }}}
 
     def __switchDiscovery(self): # {{{
         """This function discovers the available switches"""
-
         self.selectedSwitch = None
         self.discoveryrequest = True
         # Discovery needs two different requests...i have no idea why..
@@ -190,8 +190,10 @@ returns : a dictionary with the parse results
                         dataresult.update({ data[:4] : data[8:(8+length)] })
                     data = data[(8+length):]
             else:
-                print 'Not a result to my sequence!'
+                dataresult.update({ 'ERROR' : 'Not a response to my request!' })
         else:
+            if data[4:8] == self.switchattributes['switch-password'][0]:
+                self.password = None
             dataresult.update({ 'ERROR' : data[4:8] })
         return dataresult
     # }}}
@@ -199,7 +201,7 @@ returns : a dictionary with the parse results
     def __convertHex(self, hexvalue, target): # {{{
         """This function converts hexdata to a target type
 hexvalue : the value we want to convert
-target : target type, any of 'ip', 'string', 'cipher', 'mac'
+target : target type, any of 'ip', 'string', 'cipher', 'mac', 'dhcpoption', 'port-status', 'port-mirror'
 """
         if target == 'ip':
             result = str(int('0x' + hexvalue[:2],0)) + '.' + str(int('0x' + hexvalue[2:4],0)) + '.' \
@@ -217,8 +219,10 @@ target : target type, any of 'ip', 'string', 'cipher', 'mac'
         elif target == 'dhcpoption':
             if hexvalue == '01':
                 result = 'enabled'
-            else:
+            elif hexvalue == '02':
                 result = 'disabled'
+            else:
+                result = 'unknown'
         elif target == 'port-status':
             result = []
             for port in hexvalue:
@@ -261,9 +265,8 @@ target : target type, any of 'ip', 'string', 'cipher', 'mac'
     
     def __printResult(self, result): # {{{
         """This function prints the results
-result: hexvalue we get from the switch
-        """
-        if not result:
+result: hexvalue we get from the switch"""
+        if not result or result == None:
             print 'Something is wrong....'
             return False
 
@@ -274,7 +277,7 @@ result: hexvalue we get from the switch
                 self.discoveryrequest = False
                 self.switchList = []
                 counter = 0
-                print 'please select one of the following switches with selectSwitch'
+                print 'please select one of the following switches with "selectSwitch $NR"'
                 for key in self.switches.keys():
                     self.switchList.append(key)
                     print '--> ' + str(counter) + ': ' + key
@@ -292,6 +295,7 @@ result: hexvalue we get from the switch
             for key in  self.switchattributes.keys():
                 if resultdict['ERROR'] == self.switchattributes[key][0]:
                     found = key
+                    break
             if found != None:
                 print 'ERROR with ' + found
             else:
@@ -301,8 +305,6 @@ result: hexvalue we get from the switch
         else:
             for key in self.switchattributes.keys():
                 if self.switchattributes[key][0] in resultdict and len(resultdict[self.switchattributes[key][0]]) > 0:
-                    if key == 'switch-mac':
-                       self.destmac = resultdict[self.switchattributes[key][0]]
                     convertdata = self.__convertHex(resultdict[self.switchattributes[key][0]],self.switchattributes[key][1])
                     if type(convertdata).__name__ == 'list':
                         print key + ': '
@@ -348,11 +350,18 @@ result: hexvalue we get from the switch
 
     def do_selectSwitch(self, line): # {{{
         element = self.__splitLine(1,line)
-        if self.switchList == None:
+        if self.switchList == None or self.switches == {}:
             print 'please do getSwitches first..'
         else:
             try:
                 self.selectedSwitch = self.switchList[int(element)]
+                switchdict = self.__parseData(self.switches[self.selectedSwitch])
+                if self.switchattributes['switch-mac'][0] in switchdict.keys():
+                   self.destmac = switchdict[self.switchattributes['switch-mac'][0]]
+                else:
+                   print 'Error while trying to set the destination mac address...'
+                   print 'Try getSwitches and selectSwitch again...'
+                   return False
             except IndexError:
                 print 'please use a valid element'
                 print 'use getSwitches to get a valid list of elements'
@@ -371,7 +380,7 @@ $password : the password to try"""
     
     def do_getSwitches(self, line): # {{{
         """Discover all available switches again.
-Syntax: discovery"""
+Syntax: getSwitches"""
         self.__switchDiscovery()
     # }}}
 
@@ -495,4 +504,6 @@ Syntax: setPortMirror $option $fromPort $toPort
     # }}}
 
 if __name__ == '__main__':
-    SwitchConfig().cmdloop()
+    NetgearConfig().cmdloop()
+
+# vim:filetype=python:foldmethod=marker:autoindent:expandtab:tabstop=4
