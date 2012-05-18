@@ -145,8 +145,8 @@ class NetgearConfig(cmd.Cmd):
                 data += datapair[1]
         else:
             if isinstance(datalist, tuple):
-                attribute = datalist[1]
-                value = datalist[0]
+                attribute = datalist[0]
+                value = datalist[1]
                 if len(datalist[1]) < 2:
                     length=0
                 else:
@@ -234,10 +234,10 @@ target : target type, any of 'ip', 'string', 'cipher', 'mac', 'dhcpoption', 'por
         elif target == 'dhcpoption':
             if hexvalue == '01':
                 result = 'enabled'
-            elif hexvalue == '02':
+            elif hexvalue == '00':
                 result = 'disabled'
             else:
-                result = 'unknown'
+                result = hexvalue + ' unknown'
         elif target == 'port-status':
             result = []
             for port in hexvalue:
@@ -282,10 +282,11 @@ sourcetype : the type of data we had
         if sourcetype == 'ip':
             ip = value.split('.')
             for pair in ip:
-                data += str(hex(pair))[2:]
+                data += str(hex(int(pair)))[2:].rjust(2,'0')
         else:
             print 'sourcetype not yet implemented...'
             return False
+        return data
     # }}}
 
     def __increaseSequence(self): # {{{
@@ -466,8 +467,12 @@ Syntax: setPassword $password
 
     def do_setDHCP(self, line): # {{{
         """change the DHCP settings.
-Syntax: setDHCP $option
-->$option : any of - disable, enable, renew"""
+Syntax: setDHCP $option $IP $Gateway $Netmask
+->$option : any of - disable, enable, renew
+->$IP: ip address to set
+-> Gateway: Gateway to use
+-> Netmask: Netmask to use"""
+        result = False
         option, ip, gateway, netmask = self.__splitLine(4,line)
         print 'Setting DHCP option...'
         if option == 'renew':
@@ -480,14 +485,14 @@ Syntax: setDHCP $option
                 (self.switchattributes['switch-netmask'][0],self.__convertToHex(netmask, 'ip')),
                 (self.switchattributes['switch-gateway'][0],self.__convertToHex(gateway, 'ip')),
                 (self.switchattributes['switch-dhcp'][0],'00')))
-                pass
             else:
                 setvalue='00'
         else:
             print 'please use any of: renew, enable, disable'
             return False
-        result = self.__sendData('set',(self.switchattributes['switch-dhcp'][0],setvalue))
-        self.__printResult(result)
+        if result == False:
+            result = self.__sendData('set',(self.switchattributes['switch-dhcp'][0], setvalue))
+        self.__switchDiscovery()
      # }}}
 
     def do_setRestart(self, line): # {{{
