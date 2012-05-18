@@ -1,6 +1,8 @@
 #!/usr/bin/python
-# GPL
+# -*- coding: utf-8 -*-
+#
 # https://github.com/Z3po/Netgearizer
+# Licensed under the GPLv3
 
 import socket
 import binascii
@@ -38,7 +40,7 @@ class NetgearConfig(cmd.Cmd):
                         'switch-port-statuses' : ('0c00', 'port-status'),
                         'switch-firmware' : ('000d','string'),
                         'switch-restart' : ('0013','raw'), 'switch-factory-reset' : ('0400','raw'),
-                        'switch-port-counter' : ('1000','port-counter'), 'switch-port-counter-reset' : ('1400','raw'),
+                        'switch-port-stats' : ('1000','port-counter'), 'switch-port-counter-reset' : ('1400','raw'),
                         'switch-port-mirror' : ('5c00', 'port-mirror'), 'switch-port-count' : ('6000','cipher')}
     
     
@@ -117,6 +119,9 @@ class NetgearConfig(cmd.Cmd):
             data = '0103'
         elif reqtype == 'get':
             data = '0101'
+        else:
+            print 'Unknown request type.'
+            return None
     
         if not self.discoveryrequest and self.selectedSwitch == None:
             print 'please select one of the switches you get with getSwitches first.'
@@ -139,12 +144,22 @@ class NetgearConfig(cmd.Cmd):
                 data += datapair[0] + hex(length)[2:].rjust(4,'0')
                 data += datapair[1]
         else:
-            if len(datalist[1]) < 2:
+            if isinstance(datalist, tuple):
+                attribute = datalist[1]
+                value = datalist[0]
+                if len(datalist[1]) < 2:
+                    length=0
+                else:
+                    length=len(datalist[1])/2
+            elif isinstance(datalist, str):
                 length=0
+                attribute = datalist
+                value = ''
             else:
-                length=len(datalist[1])/2
-            data += datalist[0] + hex(length)[2:].rjust(4,'0')
-            data += datalist[1]
+                print 'Error with input data.'
+                return None
+            data += attribute + hex(length)[2:].rjust(4,'0')
+            data += value
         data += enddata
         result = self.__socketSend(binascii.unhexlify(data))
         return result
@@ -198,7 +213,7 @@ returns : a dictionary with the parse results
         return dataresult
     # }}}
     
-    def __convertHex(self, hexvalue, target): # {{{
+    def __convertFromHex(self, hexvalue, target): # {{{
         """This function converts hexdata to a target type
 hexvalue : the value we want to convert
 target : target type, any of 'ip', 'string', 'cipher', 'mac', 'dhcpoption', 'port-status', 'port-mirror'
@@ -248,9 +263,9 @@ target : target type, any of 'ip', 'string', 'cipher', 'mac', 'dhcpoption', 'por
         elif target == 'port-counter':
             result = []
             for port in hexvalue:
-                sendstats = self.__convertHex(port[2:18],'cipher')
-                receivestats = self.__convertHex(port[19:35],'cipher')
-                crcerrors = self.__convertHex(port[36:53],'cipher')
+                sendstats = self.__convertFromHex(port[2:18],'cipher')
+                receivestats = self.__convertFromHex(port[19:35],'cipher')
+                crcerrors = self.__convertFromHex(port[36:53],'cipher')
                 result.append(( 'Port ' + str(port[:2]), (('send', sendstats), ('receive', receivestats), ('crcerrors', crcerrors))))
         else:
             result = hexvalue
@@ -258,6 +273,21 @@ target : target type, any of 'ip', 'string', 'cipher', 'mac', 'dhcpoption', 'por
         return result
     # }}}
     
+    def __convertToHex(self, value, sourcetype): # {{{
+        """This function converts data of sourcetype to hex.
+value : the value we want to convert
+sourcetype : the type of data we had
+"""
+        data = ''
+        if sourcetype == 'ip':
+            ip = value.split('.')
+            for pair in ip:
+                data += str(hex(pair))[2:]
+        else:
+            print 'sourcetype not yet implemented...'
+            return False
+    # }}}
+
     def __increaseSequence(self): # {{{
         """This function does nothing than increase the sequence number we use"""
         self.sequence = hex(int(self.sequence, 16) + 1)[2:].rjust(8,'0')
@@ -305,7 +335,7 @@ result: hexvalue we get from the switch"""
         else:
             for key in self.switchattributes.keys():
                 if self.switchattributes[key][0] in resultdict and len(resultdict[self.switchattributes[key][0]]) > 0:
-                    convertdata = self.__convertHex(resultdict[self.switchattributes[key][0]],self.switchattributes[key][1])
+                    convertdata = self.__convertFromHex(resultdict[self.switchattributes[key][0]],self.switchattributes[key][1])
                     if type(convertdata).__name__ == 'list':
                         print key + ': '
                         for element in convertdata:
@@ -387,30 +417,28 @@ Syntax: getSwitches"""
     def do_getPortCount(self, line): # {{{
         """return the numbers of ports available.
 Syntax: getPortCount"""
-        result = self.__sendData('get',((self.switchattributes['switch-port-count'][0],''),))
+        result = self.__sendData('get', self.switchattributes['switch-port-count'][0])
         self.__printResult(result)
     # }}}
     
     def do_getLinkStatus(self, line): # {{{
         """return link statuses of all ports.
 Syntax: getLinkStatus"""
-        linkstatus = '0c00'
-        result = self.__sendData('get',((linkstatus,''),))
-    
+        result = self.__sendData('get', self.switchattributes['switch-port-statuses'][0])
         self.__printResult(result)
     # }}}
     
     def do_getPortStatistics(self, line): # {{{
         """show port statistics.
 Syntax: getPortStatistics"""
-        result = self.__sendData('get',('1000',''))
+        result = self.__sendData('get', self.switchattributes['switch-port-stats'][0])
         self.__printResult(result)
     # }}}
  
     def do_getPortMirror(self, line): # {{{
         """show port mirror setup.
 Syntax: getPortMirror"""
-        result = self.__sendData('get',(self.switchattributes['switch-port-mirror'][0],''))
+        result = self.__sendData('get', self.switchattributes['switch-port-mirror'][0])
         self.__printResult(result)
     # }}}
 
@@ -448,9 +476,10 @@ Syntax: setDHCP $option
             setvalue='01'
         elif option == 'disable':
             if ip is not None and gateway is not None and netmask is not None:
-#                result = self.__sendData(self.privilegedrequest,((self.switchattributes['switch-ip'][0],ip.encode('hex')),
-#                (self.switchattributes['switch-netmask'][0],netmask.encode('hex')),(self.switchattributes['switch-gateway'][0],gateway.encode('hex')),
-#                (self.switchattributes['switch-dhcp'][0],'00')))
+                result = self.__sendData('set',((self.switchattributes['switch-ip'][0],self.__convertToHex(ip, 'ip')),
+                (self.switchattributes['switch-netmask'][0],self.__convertToHex(netmask, 'ip')),
+                (self.switchattributes['switch-gateway'][0],self.__convertToHex(gateway, 'ip')),
+                (self.switchattributes['switch-dhcp'][0],'00')))
                 pass
             else:
                 setvalue='00'

@@ -9,4 +9,4 @@ Usage
 ========
 
 Just execute the python script
-    # ./netgerizer.py
+    # ./netgearizer.py
