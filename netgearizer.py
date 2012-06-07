@@ -11,7 +11,7 @@ import re
 import cmd
 from sys import exit
 
-class NetgearConfig(cmd.Cmd):
+class NetgearConfig(cmd.Cmd): # {{{
     
     # addressing information
     DESTIP = '<broadcast>'
@@ -36,12 +36,15 @@ class NetgearConfig(cmd.Cmd):
                         'switch-ip' : ('0006','ip'),
                         'switch-netmask' : ('0007','ip'), 'switch-gateway' : ('0008','ip'),
                         'new-switch-password' : ('0009', 'string'),
-                        'switch-password' : ('000a', 'string'), 'switch-dhcp' : ('000b', 'dhcpoption'),
+                        'switch-password' : ('000a', 'string'), 'switch-dhcp' : ('000b', 'boolean'),
                         'switch-port-statuses' : ('0c00', 'port-status'),
                         'switch-firmware' : ('000d','string'),
                         'switch-restart' : ('0013','raw'), 'switch-factory-reset' : ('0400','raw'),
                         'switch-port-stats' : ('1000','port-counter'), 'switch-port-counter-reset' : ('1400','raw'),
-                        'switch-port-mirror' : ('5c00', 'port-mirror'), 'switch-port-count' : ('6000','cipher')}
+                        'switch-vlans' : ('2000','vlan-status'),
+                        'switch-port-mirror' : ('5c00', 'port-mirror'), 'switch-port-count' : ('6000','cipher'),
+                        'switch-block-unknown-multicasts' : ('6c00', 'boolean'),
+                        'switch-igmp-snooping-status' : ('6800', 'igmp-snooping-status'), 'switch-igmp-header-validation' : ('7000', 'boolean')}
     
     
     def __init__(self): # {{{
@@ -107,7 +110,7 @@ class NetgearConfig(cmd.Cmd):
                 return True
     # }}}
  
-    def __sendData(self, reqtype,datalist): # {{{
+    def __sendData(self, reqtype, datalist): # {{{
         """This function builds the data to send them out via __socketSend"""
         self.switches = {}
         self.__increaseSequence()
@@ -171,9 +174,9 @@ class NetgearConfig(cmd.Cmd):
         self.discoveryrequest = True
         # Discovery needs two different requests...i have no idea why..
         discoveryresult = self.__sendData('get',(('0001',''),('0002',''),('0003',''),('0004',''),('0005',''),('0006',''),('0007',''),('0008',''),('000b',''),('000c',''),('000d',''),('000e',''),('000f',''),('7400','')))
-    
+ 
         discoveryresult = self.__sendData('get',(('0001',''),('0002',''),('0003',''),('0004',''),('0005',''),('0006',''),('0007',''),('0008',''),('000b',''),('000c',''),('000d',''),('000e',''),('000f','')))
-    
+ 
         self.__printResult(discoveryresult)
     # }}}
 
@@ -216,7 +219,7 @@ returns : a dictionary with the parse results
     def __convertFromHex(self, hexvalue, target): # {{{
         """This function converts hexdata to a target type
 hexvalue : the value we want to convert
-target : target type, any of 'ip', 'string', 'cipher', 'mac', 'dhcpoption', 'port-status', 'port-mirror'
+target : target type, any of 'ip', 'string', 'cipher', 'mac', 'dhcpoption', 'port-status', 'port-mirror', 'vlan-status'
 """
         if target == 'ip':
             result = str(int('0x' + hexvalue[:2],0)) + '.' + str(int('0x' + hexvalue[2:4],0)) + '.' \
@@ -231,10 +234,26 @@ target : target type, any of 'ip', 'string', 'cipher', 'mac', 'dhcpoption', 'por
                 result += hexvalue[:2] + ':'
                 hexvalue = hexvalue[2:]
             result += hexvalue
-        elif target == 'dhcpoption':
-            if hexvalue == '01':
+        elif target == 'boolean':
+            if hexvalue == '00':
+                result = 'disabled'
+            elif hexvalue == '01':
                 result = 'enabled'
+            else:
+                result = 'unknown'
+        elif target == 'vlan-status':
+            if hexvalue == '01':
+                result = 'enabled simple mode'
+            elif hexvalue == '02':
+                result = 'enabled advanced mode'
             elif hexvalue == '00':
+                result = 'disabled'
+            else:
+                result = hexvalue + ' unknown'
+        elif target == 'igmp-snooping-status':
+            if hexvalue[:4] == '0001':
+                result = 'enabled on vlan ' + self.__convertFromHex(hexvalue[4:8],'cipher')
+            elif hexvalue[:4] == '0000':
                 result = 'disabled'
             else:
                 result = hexvalue + ' unknown'
@@ -282,7 +301,21 @@ sourcetype : the type of data we had
         if sourcetype == 'ip':
             ip = value.split('.')
             for pair in ip:
-                data += str(hex(int(pair)))[2:].rjust(2,'0')
+                data += self.__convertToHex(pair, 'int')
+        elif sourcetype == 'int':
+            try:
+                data += str(hex(int(value)))[2:].rjust(2,'0')
+            except ValueError:
+                print 'please give a valid numeric value'
+                return False
+        elif sourcetype == 'boolean':
+            if value == 'disable':
+                data = '00'
+            elif value == 'enable':
+                data = '01'
+            else:
+                print 'please use enable or disable as option'
+                return False
         else:
             print 'sourcetype not yet implemented...'
             return False
@@ -443,6 +476,34 @@ Syntax: getPortMirror"""
         self.__printResult(result)
     # }}}
 
+    def do_getIGMPSnoopingStatus(self, line): # {{{
+        """show igmp snooping status.
+Syntax: getIGMPSnoopingStatus"""
+        result = self.__sendData('get', self.switchattributes['switch-igmp-snooping-status'][0])
+        self.__printResult(result)
+    # }}}
+
+    def do_getIGMPHeaderValidation(self, line): # {{{
+        """show if igmp header validation is enabled.
+Syntax: getValidateIGMPHeaderStatus"""
+        result = self.__sendData('get', self.switchattributes['switch-igmp-header-validation'][0])
+        self.__printResult(result)
+    # }}}
+
+    def do_getBlockUnknownMulticasts(self, line): # {{{
+        """show block settings for unknown multicasts.
+Syntax: getUnknownMulticastsBlockStatus"""
+        result = self.__sendData('get', self.switchattributes['switch-block-unknown-multicasts'][0])
+        self.__printResult(result)
+    # }}}
+
+    def do_getVlansStatus(self, line): # {{{
+        """show if vlans are enabled or disabled.
+Syntax: getVlansStatus"""
+        result = self.__sendData('get', self.switchattributes['switch-vlans'][0])
+        self.__printResult(result)
+    # }}}
+
     def do_setSwitchName(self, line): # {{{
         """set the switch name.
 Syntax: setSwitchName $name
@@ -496,7 +557,7 @@ Syntax: setDHCP $option $IP $Gateway $Netmask
      # }}}
 
     def do_setRestart(self, line): # {{{
-        """"restart the switch (or not).
+        """"restart the switch.
 Syntax: setRestart"""
         print 'Restarting switch...'
         result = self.__sendData('set',(self.switchattributes['switch-restart'][0],'01'))
@@ -536,6 +597,48 @@ Syntax: setPortMirror $option $fromPort $toPort
         else:
             print 'please use enable or disable as option'
     # }}}
+
+    def do_setIGMPSnoopingStatus(self, line): # {{{
+        """set IGMP Snooping Status.
+Syntax: setIGMPSnoopingStatus $option $vlan
+->$option : enable/disable
+->$vlan : on which vlan should IGMP Snooping be enabled? (01 if vlans are disabled)"""
+        option, vlan = self.__splitLine(2,line)
+        hexoption = self.__convertToHex(option,'boolean')
+        hexvlan = self.__convertToHex(vlan,'int')
+        if hexoption == False:
+            return False
+        elif hexvlan == False:
+            return False
+        result = self.__sendData('set',(self.switchattributes['switch-igmp-snooping-status'][0], hexoption.rjust(4,'0') + hexvlan.rjust(4,'0')))
+        self.__printResult(result)
+    # }}}
+
+    def do_setIGMPHeaderValidation(self, line): # {{{
+        """set IGMP Header Validation.
+Syntax: setIGMPSnoopingStatus $option
+->$option : enable/disable"""
+        option = self.__splitLine(1,line)
+        hexoption = self.__convertToHex(option,'boolean')
+        if hexoption == False:
+            return False
+        result = self.__sendData('set',(self.switchattributes['switch-igmp-header-validation'][0], hexoption))
+        self.__printResult(result)
+    # }}}
+
+    def do_setBlockUnknownMulticasts(self, line): # {{{
+        """set Unknown Multicast Blocking.
+Syntax: setBlockUnknownMulticasts $option
+->$option : enable/disable"""
+        option = self.__splitLine(1,line)
+        hexoption = self.__convertToHex(option,'boolean')
+        if hexoption == False:
+            return False
+        result = self.__sendData('set',(self.switchattributes['switch-block-unknown-multicasts'][0], hexoption))
+        self.__printResult(result)
+    # }}}
+
+# }}}
 
 if __name__ == '__main__':
     NetgearConfig().cmdloop()
