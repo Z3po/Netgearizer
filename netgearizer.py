@@ -37,10 +37,10 @@ class NetgearConfig(cmd.Cmd): # {{{
                         'switch-netmask' : ('0007','ip'), 'switch-gateway' : ('0008','ip'),
                         'new-switch-password' : ('0009', 'string'),
                         'switch-password' : ('000a', 'string'), 'switch-dhcp' : ('000b', 'boolean'),
-                        'switch-port-statuses' : ('0c00', 'port-status'),
+                        'switch-link-statuses' : ('0c00', 'link-status'),
                         'switch-firmware' : ('000d','string'),
                         'switch-restart' : ('0013','raw'), 'switch-factory-reset' : ('0400','raw'),
-                        'switch-port-stats' : ('1000','port-counter'), 'switch-port-counter-reset' : ('1400','raw'),
+                        'switch-port-statistics' : ('1000','port-counter'), 'switch-port-counter-reset' : ('1400','raw'),
                         'switch-vlans' : ('2000','vlan-status'),
                         'switch-port-mirror' : ('5c00', 'port-mirror'), 'switch-port-count' : ('6000','cipher'),
                         'switch-block-unknown-multicasts' : ('6c00', 'boolean'),
@@ -219,7 +219,7 @@ returns : a dictionary with the parse results
     def __convertFromHex(self, hexvalue, target): # {{{
         """This function converts hexdata to a target type
 hexvalue : the value we want to convert
-target : target type, any of 'ip', 'string', 'cipher', 'mac', 'dhcpoption', 'port-status', 'port-mirror', 'vlan-status'
+target : target type, any of 'ip', 'string', 'cipher', 'mac', 'dhcpoption', 'link-status', 'port-mirror', 'vlan-status'
 """
         if target == 'ip':
             result = str(int('0x' + hexvalue[:2],0)) + '.' + str(int('0x' + hexvalue[2:4],0)) + '.' \
@@ -257,7 +257,7 @@ target : target type, any of 'ip', 'string', 'cipher', 'mac', 'dhcpoption', 'por
                 result = 'disabled'
             else:
                 result = hexvalue + ' unknown'
-        elif target == 'port-status':
+        elif target == 'link-status':
             result = []
             for port in hexvalue:
                 if port[2:4] == '05':
@@ -458,14 +458,14 @@ Syntax: getPortCount"""
     def do_getLinkStatus(self, line): # {{{
         """return link statuses of all ports.
 Syntax: getLinkStatus"""
-        result = self.__sendData('get', self.switchattributes['switch-port-statuses'][0])
+        result = self.__sendData('get', self.switchattributes['switch-link-statuses'][0])
         self.__printResult(result)
     # }}}
     
     def do_getPortStatistics(self, line): # {{{
         """show port statistics.
 Syntax: getPortStatistics"""
-        result = self.__sendData('get', self.switchattributes['switch-port-stats'][0])
+        result = self.__sendData('get', self.switchattributes['switch-port-statistics'][0])
         self.__printResult(result)
     # }}}
  

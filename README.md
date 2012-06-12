@@ -11,3 +11,9 @@ Usage
 
 Just execute the python script
     # ./netgearizer.py
+
+and get all the commands with "help" afterwards :)
+
+ATTENTION
+=======
+This Project is going to merge with https://github.com/tabacha/ProSafeLinux as we recognized we are working on the same stuff :)
